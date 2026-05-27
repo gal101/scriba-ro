@@ -1,0 +1,44 @@
+# ============================================================
+#  Scriba Ro — .gitignore
+#  Urcă doar codul sursă, NU modelele sau mediul virtual.
+# ============================================================
+
+# ── Mediu virtual Python (11+ GB) ───────────────────────────
+.venv/
+venv/
+env/
+
+# ── Modele AI (sute de MB / GB fiecare) ─────────────────────
+models/
+*.nemo
+*.pt
+*.pth
+*.ckpt
+*.bin
+*.gguf
+*.safetensors
+
+# ── Cache-uri locale (generate automat) ─────────────────────
+__pycache__/
+*.pyc
+*.pyo
+.cache/
+
+# ── Fișiere temporare generate de aplicație ──────────────────
+scriba.log
+_tmp_dictation.wav
+*.log
+
+# Config cu date personale (microfon, device ales etc.) ───
+config.json
+
+# ── Fișiere sistem Windows ───────────────────────────────────
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# ── IDE-uri ──────────────────────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.user
