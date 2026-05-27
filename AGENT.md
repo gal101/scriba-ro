@@ -1,121 +1,121 @@
-# AGENT.md — Ghid pentru agenți AI care lucrează la Scriba Ro
+# AGENT.md — Developer & AI Agent Reference for Scriba Ro
 
-Acest document descrie în detaliu arhitectura, fluxul de date, fișierele și deciziile tehnice
-ale proiectului **Scriba Ro**. Citește-l integral înainte de a face orice modificare.
-
----
-
-## 1. Ce este aplicația
-
-Scriba Ro este o aplicație Windows de **dictare vocală offline** cu system tray.
-Utilizatorul ține apăsată o tastă rapidă, vorbește, iar textul transcris este injectat
-automat în fereastra activă via clipboard (Ctrl+V simulat).
-
-Există **două motoare ASR**, selectate în funcție de limbă:
-
-| Limbă | Model | Bibliotecă | Fișier |
-|-------|-------|------------|--------|
-| 🇷🇴 Română | `upb-nlp/ro-fast-conformer` | NeMo 2.7.3 | `models/Speech_To_Text_Finetuning.nemo` |
-| 🇬🇧 Engleză | `openai/whisper-large-v3-turbo` | faster-whisper | `models/whisper-large-v3-turbo-ct2/` |
+Read this document in full before making any changes to the codebase.
+It describes the architecture, data flow, files, and key technical decisions of **Scriba Ro**.
 
 ---
 
-## 2. Structura fișierelor
+## 1. What the app does
+
+Scriba Ro is a **Windows offline voice dictation app** that lives in the system tray.
+The user holds a hotkey, speaks, and the transcribed text is automatically injected
+into the active window via clipboard (simulated Ctrl+V).
+
+There are **two ASR engines**, selected based on the active language:
+
+| Language | Model | Library | File |
+|----------|-------|---------|------|
+| 🇷🇴 Romanian | `upb-nlp/ro-fast-conformer` | NeMo 2.7.3 | `models/Speech_To_Text_Finetuning.nemo` |
+| 🇬🇧 English | `openai/whisper-large-v3-turbo` | faster-whisper | `models/whisper-large-v3-turbo-ct2/` |
+
+---
+
+## 2. File structure
 
 ```
 Whisper/
-├── app.py                  # Logica principală (entry point)
-├── overlay.py              # Fereastra plutitoare (Tkinter)
-├── setup.py                # Wizard de setup la prima rulare
-├── run.bat                 # Launcher: rulează setup.py, apoi app.py
-├── requirements.txt        # Dependențe pip
-├── config.json             # Configurație persistată (gitignored)
-├── scriba.log              # Log runtime (gitignored)
+├── app.py                  # Main logic (entry point)
+├── overlay.py              # Floating indicator window (Tkinter)
+├── setup.py                # First-run setup wizard
+├── run.bat                 # Launcher: runs setup.py, then app.py
+├── requirements.txt        # pip dependencies
+├── config.json             # Persisted user config (gitignored)
+├── scriba.log              # Runtime log (gitignored)
 ├── models/
-│   ├── whisper-large-v3-turbo-ct2/   # Model Whisper (CTranslate2)
-│   └── Speech_To_Text_Finetuning.nemo # Model NeMo UPB (română)
-└── .venv/                  # Mediu virtual Python (gitignored)
+│   ├── whisper-large-v3-turbo-ct2/    # Whisper model (CTranslate2 format)
+│   └── Speech_To_Text_Finetuning.nemo # NeMo UPB model (Romanian)
+└── .venv/                  # Python virtual environment (gitignored)
 ```
 
 ---
 
-## 3. Fișierele principale
+## 3. Main files
 
-### `app.py` — logica centrală
+### `app.py` — core logic
 
-Conține toate componentele aplicației:
+Contains all application components.
 
-#### `AppState` (clasă globală singleton)
+#### `AppState` (global singleton)
 ```python
 app_state = AppState()
 ```
-Stochează starea globală:
-- `app_state.model` — instanța faster-whisper (Whisper, pentru EN)
-- `app_state.nemo_model` — instanța NeMo ASRModel (pentru RO)
-- `app_state.config` — dict cu configurația curentă
+Stores all global state:
+- `app_state.model` — faster-whisper instance (Whisper, for EN)
+- `app_state.nemo_model` — NeMo ASRModel instance (for RO)
+- `app_state.config` — dict with current user configuration
 - `app_state.state` — `"idle"` / `"recording"` / `"transcribing"`
-- `app_state.overlay` — instanța `DictationOverlay`
-- `app_state.dashboard` — instanța `DashboardWindow`
-- `app_state.tray_icon` — instanța pystray
+- `app_state.overlay` — `DictationOverlay` instance
+- `app_state.dashboard` — `DashboardWindow` instance
+- `app_state.tray_icon` — pystray instance
 - `app_state.keyboard_listener`, `app_state.mouse_listener`
 
-#### Funcții critice
+#### Key functions
 
-| Funcție | Rol |
-|---------|-----|
-| `load_config()` / `save_config()` | Citește/scrie `config.json` |
-| `find_nemo_file()` | Caută fișierul `.nemo` în `models/` sau `~/.cache/torch/NeMo/` |
-| `load_nemo_model()` | Încarcă modelul NeMo pe CUDA/CPU, setează `app_state.nemo_model` |
-| `load_whisper_model()` | Încarcă modelul Whisper, setează `app_state.model` |
-| `check_and_preload_active_model()` | Detectează limba activă și lansează încărcarea modelului corect pe un daemon thread |
-| `transcribe_and_type_thread(audio_data)` | Rutează transcrierea la NeMo (RO) sau Whisper (EN), injectează textul |
-| `start_recording()` | Pornește `sd.InputStream` la 16kHz |
-| `stop_recording_and_get_audio()` | Colectează chunks din `audio_queue`, resamplează dacă necesar |
-| `inject_text(text, add_space)` | Copiază în clipboard și simulează Ctrl+V |
-| `toggle_language_callback()` | Comută limba RO↔EN, salvează config, preîncarcă modelul nou, actualizează toate UI-urile |
-| `restart_listeners()` | Repornește keyboard/mouse listeners după schimbarea hotkey-ului |
-| `preload_model_and_listeners(icon)` | Rulează pe tray thread după pornire: inițializează listeners și pornește preîncărcarea |
-| `main()` | Entry point: single-instance check, creare tray icon, pornire dashboard, mainloop |
+| Function | Purpose |
+|----------|---------|
+| `load_config()` / `save_config()` | Read/write `config.json` |
+| `find_nemo_file()` | Searches for `.nemo` file in `models/` first, then `~/.cache/torch/NeMo/` |
+| `load_nemo_model()` | Loads NeMo model onto CUDA/CPU, sets `app_state.nemo_model` |
+| `load_whisper_model()` | Loads Whisper model, sets `app_state.model` |
+| `check_and_preload_active_model()` | Detects active language and launches the correct model loader on a daemon thread |
+| `transcribe_and_type_thread(audio_data)` | Routes transcription to NeMo (RO) or Whisper (EN), injects text |
+| `start_recording()` | Starts `sd.InputStream` at 16kHz |
+| `stop_recording_and_get_audio()` | Collects chunks from `audio_queue`, resamples if needed |
+| `inject_text(text, add_space)` | Copies to clipboard and simulates Ctrl+V |
+| `toggle_language_callback()` | Switches language RO↔EN, saves config, preloads new model, updates all UI elements |
+| `restart_listeners()` | Restarts keyboard/mouse listeners after hotkey change |
+| `preload_model_and_listeners(icon)` | Runs on tray thread after startup: initializes listeners and triggers model preload |
+| `main()` | Entry point: single-instance check, tray icon creation, dashboard startup, mainloop |
 
 #### `SettingsWindow` (CTkToplevel)
-- Dropdown limbă mapează `"🇷🇴 Română — NeMo UPB"` ↔ `"ro"` și `"🇬🇧 Engleză — Whisper"` ↔ `"en"`
-- `save_and_close()` salvează config, repornește listeners, distruge fereastra, apelează `check_and_preload_active_model()`
-- **F8 este exclus** din lista de hotkey-uri (conflict cu toggle-ul de limbă)
+- Language dropdown maps `"🇷🇴 Romanian — NeMo UPB"` ↔ `"ro"` and `"🇬🇧 English — Whisper"` ↔ `"en"`
+- `save_and_close()` saves config, restarts listeners, destroys the window, calls `check_and_preload_active_model()`
+- **F8 is excluded** from the hotkey options list (conflicts with the language toggle shortcut)
 
-#### `DashboardWindow` (CTkCTk — fereastra principală)
-- Poziționată în **colțul jos-dreapta** al ecranului (320×240px)
-- Conține: header, card de status, **buton de toggle limbă** (verde=RO, albastru=EN), 3 butoane (Setări/Ascunde/Ieșire)
-- `update_status(state)` — actualizează textul și culoarea cardului de status
-- `update_lang_button(lang)` — actualizează butonul de limbă (chemat din `toggle_language_callback`)
-- Minimizare la X → `hide_window()` (nu iese din aplicație)
-
----
-
-### `overlay.py` — fereastra plutitoare
-
-Clasă: `DictationOverlay`
-
-- Fereastră **frameless, transparentă, always-on-top** (Tkinter)
-- **Vizibilă DOAR** când înregistrezi sau transcrii (ascunsă în idle cu `root.withdraw()`)
-- Conține: dot animat, text status, vizualizator audio (5 bare), buton toggle limbă (mic, în dreapta)
-- Animație la 25 FPS via `root.after(40, _pulse_animation)`
-- Toate update-urile UI trebuie făcute via `root.after(0, fn)` — thread-safe
-
-Metode importante:
-- `show_listening(lang)` — arată overlay cu text localizat, dot roșu pulsant
-- `show_transcribing(lang)` — dot portocaliu, animație wave pe bare
-- `hide()` — ascunde overlay, resetează state la `"idle"`
-- `update_language_ui(lang)` — actualizează culoarea și textul butonului de limbă
-- `update_volume(vol)` — actualizează volumul curent (0.0–1.0) pentru vizualizator
+#### `DashboardWindow` (CTkCTk — main window)
+- Positioned in the **bottom-right corner** of the screen (320×240px)
+- Contains: header, status card, **language toggle button** (green=RO, blue=EN), 3 action buttons (Settings / Hide / Exit)
+- `update_status(state)` — updates the status card text and color
+- `update_lang_button(lang)` — updates the language button (called from `toggle_language_callback`)
+- Closing via X → `hide_window()` (does not quit the app)
 
 ---
 
-### `setup.py` — wizard de primă rulare
+### `overlay.py` — floating indicator window
 
-- Verifică dacă există modelul Whisper în `models/whisper-large-v3-turbo-ct2/`
-- Dacă nu există: descarcă și convertește modelul din HuggingFace cu `faster-whisper`
-- Dacă există: lansează direct `app.py` via `pythonw.exe`
-- Scrie în `scriba.log` cu prefixul `[SETUP]`
+Class: `DictationOverlay`
+
+- **Frameless, transparent, always-on-top** Tkinter window
+- **Only visible** while recording or transcribing (hidden in idle via `root.withdraw()`)
+- Contains: animated dot, status text, audio visualizer (5 bars), small language toggle button (right side)
+- Animation at 25 FPS via `root.after(40, _pulse_animation)`
+- All UI updates must be dispatched via `root.after(0, fn)` — thread safety requirement
+
+Key methods:
+- `show_listening(lang)` — shows overlay with localized text, pulsing red dot
+- `show_transcribing(lang)` — orange dot, wave animation on bars
+- `hide()` — hides overlay, resets state to `"idle"`
+- `update_language_ui(lang)` — updates language button color and text
+- `update_volume(vol)` — updates current volume level (0.0–1.0) for the visualizer
+
+---
+
+### `setup.py` — first-run wizard
+
+- Checks whether the Whisper model exists at `models/whisper-large-v3-turbo-ct2/`
+- If missing: downloads and converts the model from HuggingFace using `faster-whisper`
+- If present: launches `app.py` directly via `pythonw.exe`
+- Writes to `scriba.log` with prefix `[SETUP]`
 
 ---
 
@@ -124,20 +124,20 @@ Metode importante:
 ```bat
 .venv\Scripts\python.exe setup.py
 ```
-Simplu: activează venv-ul implicit și rulează setup.py care decide ce face mai departe.
+Simple: activates the venv and runs `setup.py`, which decides what to do next.
 
 ---
 
-## 4. Fluxul audio complet
+## 4. Full audio pipeline
 
 ```
-Hotkey/Mouse apăsat
+Hotkey/Mouse pressed
   └─> on_trigger_down()
         ├─> app_state.state = "recording"
         ├─> overlay.show_listening(lang)
-        └─> start_recording()           # pornește sd.InputStream la 16kHz
+        └─> start_recording()           # starts sd.InputStream at 16kHz
 
-Hotkey eliberat (sau toggle în modul Press-to-Toggle)
+Hotkey released (or toggle in Press-to-Toggle mode)
   └─> on_trigger_up()
         ├─> app_state.state = "transcribing"
         ├─> overlay.show_transcribing(lang)
@@ -145,11 +145,11 @@ Hotkey eliberat (sau toggle în modul Press-to-Toggle)
               └─> threading.Thread(target=transcribe_and_type_thread, args=(audio_data,))
 
 transcribe_and_type_thread(audio_data):
-  ├─> dacă lang == "ro":
-  │     ├─> Scrie audio_data în _tmp_dictation.wav (16kHz, int16, mono)
+  ├─> if lang == "ro":
+  │     ├─> Write audio_data to _tmp_dictation.wav (16kHz, int16, mono)
   │     ├─> nemo_model.transcribe([tmp_path])
-  │     └─> Șterge fișierul temporar
-  └─> dacă lang == "en":
+  │     └─> Delete temporary file
+  └─> if lang == "en":
         └─> model.transcribe(audio_data, language="en", beam_size=5, vad_filter=True)
 
   └─> inject_text(text) → clipboard → Ctrl+V → overlay.hide()
@@ -157,7 +157,7 @@ transcribe_and_type_thread(audio_data):
 
 ---
 
-## 5. Configurație (`config.json`)
+## 5. Configuration (`config.json`)
 
 ```json
 {
@@ -175,21 +175,21 @@ transcribe_and_type_thread(audio_data):
 - `language`: `"ro"` → NeMo UPB | `"en"` → Whisper
 - `mode`: `"Hold to Talk"` | `"Press to Toggle"`
 - `device`: `"cuda"` | `"cpu"`
-- `quantization`: `"float16"` | `"int8"` (doar pentru Whisper)
+- `quantization`: `"float16"` | `"int8"` (Whisper only)
 
 ---
 
-## 6. Probleme cunoscute și soluțiile lor
+## 6. Known issues and their solutions
 
-### LoaderLock pe Windows (NeMo + threading)
-**Problemă:** `import nemo.collections.asr` din interiorul unui `threading.Thread` cauzează deadlock pe Windows (LoaderLock).  
-**Soluție:** Importul NeMo se face **exclusiv** în `load_nemo_model()` care rulează pe un daemon thread lansat din `preload_model_and_listeners` (tray thread). Nu face niciodată `import nemo` pe main thread sau pe Tkinter thread.
+### Windows LoaderLock (NeMo + threading)
+**Problem:** `import nemo.collections.asr` inside a `threading.Thread` causes a deadlock on Windows (LoaderLock).  
+**Solution:** NeMo is imported **exclusively** inside `load_nemo_model()`, which runs on a daemon thread launched from `preload_model_and_listeners` (tray thread). Never import NeMo on the main thread or Tkinter thread.
 
-### NeMo necesită fișier WAV pe disc
-**Problemă:** `nemo_model.transcribe()` nu acceptă numpy arrays direct.  
-**Soluție:** Audio-ul e scris temporar în `_tmp_dictation.wav`, transcris, apoi șters.
+### NeMo requires a WAV file on disk
+**Problem:** `nemo_model.transcribe()` does not accept numpy arrays directly.  
+**Solution:** Audio is written to a temporary `_tmp_dictation.wav`, transcribed, then deleted.
 
-### NeMo `transcribe()` returnează tipuri variate
+### NeMo `transcribe()` returns mixed types
 ```python
 result = nemo_model.transcribe([path])
 text = result[0] if isinstance(result, list) else str(result)
@@ -198,34 +198,34 @@ if hasattr(text, 'text'):
 text = str(text).strip()
 ```
 
-### Freeze UI la schimbarea limbii
-**Problemă:** `import nemo` dura ~5s și bloca Tkinter.  
-**Soluție:** Toate importurile NeMo sunt eliminate din `toggle_language_callback()` și `save_and_close()`. Modelul se încarcă **doar** în background via `check_and_preload_active_model()`.
+### UI freeze on language switch
+**Problem:** `import nemo` took ~5s and blocked the Tkinter event loop.  
+**Solution:** All NeMo imports removed from `toggle_language_callback()` and `save_and_close()`. Model loading happens exclusively in the background via `check_and_preload_active_model()`.
 
-### Single-instance
-Aplicația folosește un **Windows Mutex** (`Global\ScribaRo_SingleInstance_Mutex`) pentru a preveni rularea dublă.
+### Single-instance enforcement
+The app uses a **Windows Mutex** (`Global\ScribaRo_SingleInstance_Mutex`) to prevent double launches.
 
 ---
 
-## 7. Dependențe cheie
+## 7. Key dependencies
 
-| Pachet | Versiune | Rol |
-|--------|----------|-----|
-| `faster-whisper` | latest | Inferență Whisper optimizată |
-| `nemo_toolkit[asr]` | 2.7.3 | Model NeMo UPB pentru română |
-| `torch` | 2.5.1+cu121 | Backend GPU |
-| `sounddevice` | latest | Captare audio microfon |
-| `pyautogui` + `pyperclip` | latest | Injectare text via clipboard |
-| `customtkinter` | latest | UI modern (Settings + Dashboard) |
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `faster-whisper` | latest | Optimized Whisper inference |
+| `nemo_toolkit[asr]` | 2.7.3 | NeMo UPB model for Romanian |
+| `torch` | 2.5.1+cu121 | GPU backend |
+| `sounddevice` | latest | Microphone audio capture |
+| `pyautogui` + `pyperclip` | latest | Text injection via clipboard |
+| `customtkinter` | latest | Modern UI (Settings + Dashboard) |
 | `pystray` | latest | System tray icon |
 | `pynput` | latest | Keyboard/mouse listeners |
-| `Pillow` | latest | Generare icon tray |
+| `Pillow` | latest | Tray icon generation |
 
 ---
 
-## 8. Hardware țintă
+## 8. Target hardware
 
 - **GPU:** NVIDIA RTX 4070 Laptop (4GB VRAM)
 - **CUDA:** 12.1
 - **OS:** Windows 11
-- Ambele modele rulează pe CUDA simultan — atenție la VRAM când sunt preîncărcate în același timp
+- Both models run on CUDA — be mindful of VRAM when both are preloaded simultaneously

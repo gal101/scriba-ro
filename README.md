@@ -1,49 +1,49 @@
 # 🎤 Scriba Ro
 
-**Asistent local de dictare vocală offline pentru Windows.**  
-Apasă o tastă, vorbești, textul apare automat în orice aplicație.
+**Offline voice dictation assistant for Windows.**  
+Press a key, speak, and the text appears automatically in any application.
 
 ---
 
-## Ce face
+## What it does
 
-- **Dictare în Română** — folosește modelul `upb-nlp/ro-fast-conformer` (NeMo, WER 3.01%)
-- **Dictare în Engleză** — folosește `openai/whisper-large-v3-turbo` (CTranslate2)
-- **100% offline** — niciun audio nu pleacă în cloud
-- **Injectare automată** — textul e lipit direct în fereastra activă via clipboard
-- **System tray** — rulează discret în fundal, fără ferestre în taskbar
-- **Overlay plutitor** — indicator vizual mic când înregistrezi sau transcrii
-- **Toggle rapid** — schimbi limba cu `F8` sau din butonul din Dashboard
+- **Romanian dictation** — uses `upb-nlp/ro-fast-conformer` (NeMo, WER 3.01%)
+- **English dictation** — uses `openai/whisper-large-v3-turbo` (CTranslate2)
+- **100% offline** — no audio ever leaves your machine
+- **Auto-inject** — transcribed text is pasted directly into the active window via clipboard
+- **System tray** — runs quietly in the background, no taskbar clutter
+- **Floating overlay** — small visual indicator when recording or transcribing
+- **Quick toggle** — switch language with `F8` or via the Dashboard button
 
-## Cerințe sistem
+## Requirements
 
 - Windows 10/11
 - Python 3.10+
-- NVIDIA GPU cu CUDA (recomandat, funcționează și pe CPU)
-- ~13 GB spațiu liber (modele + mediu virtual)
+- NVIDIA GPU with CUDA (recommended, CPU also works)
+- ~13 GB free disk space (models + virtual environment)
 
-## Instalare
+## Installation
 
 ```bash
-# 1. Clonează repo-ul
+# 1. Clone the repository
 git clone https://github.com/gal101/scriba-ro.git
 cd scriba-ro
 
-# 2. Rulează setup-ul (descarcă modelele și configurează mediul)
+# 2. Run the setup wizard (downloads models and configures the environment)
 run.bat
 ```
 
-La prima rulare, `setup.py` creează automat mediul virtual și descarcă modelul Whisper.  
-Modelul NeMo pentru română trebuie descărcat separat (instrucțiuni în `AGENT.md`).
+On first run, `setup.py` automatically creates the virtual environment and downloads the Whisper model.  
+The NeMo model for Romanian is downloaded separately (see `AGENT.md` for details).
 
-## Utilizare
+## Usage
 
-1. Rulează `run.bat`
-2. Apare iconița roșie în system tray și fereastra Dashboard
-3. Ține apăsată tasta configurată (implicit: **Right Control**) și vorbești
-4. Eliberezi tasta — textul apare în fereastra activă
-5. Schimbi limba cu **F8** sau din butonul verde/albastru din Dashboard
+1. Run `run.bat`
+2. A red icon appears in the system tray and the Dashboard window opens
+3. Hold down the configured key (default: **Right Control**) and speak
+4. Release the key — the transcribed text appears in the active window
+5. Switch language with **F8** or the green/blue button in the Dashboard
 
-## Licență
+## License
 
-Proiect personal. Modelele AI au licențele lor proprii (Apache 2.0 / CC-BY).
+Personal project. AI models are subject to their own licenses (Apache 2.0 / CC-BY).
