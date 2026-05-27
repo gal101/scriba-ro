@@ -523,6 +523,16 @@ def transcribe_and_type_thread(audio_data):
             log_message(f"Whisper transcriere completa in {duration:.2f}s: '{text}' (detectat: {info.language}, prob: {info.language_probability:.2f})")
 
         if text:
+            try:
+                import postprocessor
+                if lang == "en":
+                    text = postprocessor.process_english(text)
+                elif lang == "ro":
+                    text = postprocessor.process_romanian(text)
+                log_message(f"Text dupa postprocesare: '{text}'")
+            except Exception as e:
+                log_message(f"Eroare la postprocesare: {str(e)}")
+
             inject_text(text, add_space=app_state.config["add_space"])
         else:
             log_message("Niciun cuvant detectat in audio.")
@@ -544,9 +554,10 @@ def inject_text(text, add_space=True):
     old_clipboard = pyperclip.paste()
     log_message("Salvare backup clipboard curent.")
     
-    # Prepend space if selected
+    # Smart space detection if enabled
+    # Add space at the END instead of the beginning to prevent leading space in new messages
     if add_space:
-        text = " " + text
+        text = text + " "
         
     # Copy to clipboard
     pyperclip.copy(text)

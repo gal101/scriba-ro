@@ -11,6 +11,7 @@ Press a key, speak, and the text appears automatically in any application.
 - **English dictation** — uses `openai/whisper-large-v3-turbo` (CTranslate2)
 - **100% offline** — no audio ever leaves your machine
 - **Auto-inject** — transcribed text is pasted directly into the active window via clipboard
+- **Intelligent post-processing** — automatic punctuation and capitalization restoration for Romanian (using `punctuators` library) and smart spacing injection
 - **System tray** — runs quietly in the background, no taskbar clutter
 - **Floating overlay** — small visual indicator when recording or transcribing
 - **Quick toggle** — switch language with `F8` or via the Dashboard button
