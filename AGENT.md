@@ -25,9 +25,11 @@ There are **two ASR engines**, selected based on the active language:
 ```
 Whisper/
 ├── app.py                  # Main logic (entry point)
+├── postprocessor.py        # NLP post-processing (punctuation & text cleanup)
 ├── overlay.py              # Floating indicator window (Tkinter)
-├── setup.py                # First-run setup wizard
-├── run.bat                 # Launcher: runs setup.py, then app.py
+├── setup.py                # Model downloader for Whisper
+├── launcher.py             # Graphical splash screen & environment bootstrapper
+├── run.bat                 # Entry point: runs launcher.py
 ├── requirements.txt        # pip dependencies
 ├── config.json             # Persisted user config (gitignored)
 ├── scriba.log              # Runtime log (gitignored)
@@ -71,7 +73,7 @@ Stores all global state:
 | `transcribe_and_type_thread(audio_data)` | Routes transcription to NeMo (RO) or Whisper (EN), injects text |
 | `start_recording()` | Starts `sd.InputStream` at 16kHz |
 | `stop_recording_and_get_audio()` | Collects chunks from `audio_queue`, resamples if needed |
-| `inject_text(text, add_space)` | Copies to clipboard and simulates Ctrl+V |
+| `inject_text(text, add_space)` | Copies to clipboard and simulates Ctrl+V. If `add_space` is true, appends a space at the end to prepare for the next sentence without messing up initial text placement. |
 | `toggle_language_callback()` | Switches language RO↔EN, saves config, preloads new model, updates all UI elements |
 | `restart_listeners()` | Restarts keyboard/mouse listeners after hotkey change |
 | `preload_model_and_listeners(icon)` | Runs on tray thread after startup: initializes listeners and triggers model preload |
@@ -110,21 +112,44 @@ Key methods:
 
 ---
 
-### `setup.py` — first-run wizard
+### `postprocessor.py` — NLP post-processing
 
-- Checks whether the Whisper model exists at `models/whisper-large-v3-turbo-ct2/`
-- If missing: downloads and converts the model from HuggingFace using `faster-whisper`
-- If present: launches `app.py` directly via `pythonw.exe`
-- Writes to `scriba.log` with prefix `[SETUP]`
+Handles text formatting before injection, significantly improving raw ASR output.
+- **English**: Replaces spoken phrases like "slash" with `/`.
+- **Romanian**: Restores missing punctuation and capitalization using the `punctuators` NLP library with the `pcs_romance` ONNX model. 
+  - Since `pcs_romance` splits paragraphs into lists of sentences, this script joins them back.
+  - Fixes missing hyphen issues where `pcs_romance` incorrectly replaces hyphens (e.g., in "să-ți", "vi-n") with `<unk>` tokens, by reverting `<unk>` back to `-`.
+  - Loaded lazily to prevent blocking startup time.
 
 ---
 
-### `run.bat` — launcher
+### `launcher.py` — environment bootstrapper & splash screen
+
+- Displays a graphical splash screen (`tkinter`) to improve UX during the long startup process.
+- Checks if the `.venv` exists. If not, creates it and installs dependencies (`pip`, `torch` with CUDA detection, `requirements.txt`).
+- Checks if models exist (via `.scriba_models_installed`). If missing, it launches `setup.py` in the background.
+- Finally, it launches `app.py` in the background as a detached process (using `python.exe` with `CREATE_NO_WINDOW`) and informs the user to wait 1-2 minutes for the system tray icon to appear while heavy imports (PyTorch) finish loading.
+
+---
+
+### `setup.py` — model downloader
+
+- Checks whether the Whisper model exists at `models/whisper-large-v3-turbo-ct2/`
+- If missing: downloads and converts the model from HuggingFace using `faster-whisper`
+- Creates `.scriba_models_installed` flag upon completion.
+
+---
+
+### `run.bat` — entry script
 
 ```bat
-.venv\Scripts\python.exe setup.py
+:: Activam mediul virtual si rulam
+if exist ".venv\Scripts\activate.bat" (
+    call .venv\Scripts\activate.bat
+)
+python launcher.py
 ```
-Simple: activates the venv and runs `setup.py`, which decides what to do next.
+Simple: activates the venv (if it exists) and runs `launcher.py`, which handles everything else.
 
 ---
 
@@ -203,7 +228,11 @@ text = str(text).strip()
 **Solution:** All NeMo imports removed from `toggle_language_callback()` and `save_and_close()`. Model loading happens exclusively in the background via `check_and_preload_active_model()`.
 
 ### Single-instance enforcement
-The app uses a **Windows Mutex** (`Global\ScribaRo_SingleInstance_Mutex`) to prevent double launches.
+The app uses a **Windows Mutex** (`Global\ScribaRo_SingleInstance_Mutex`) to prevent double launches. If a phantom process remains in memory, this mutex blocks new launches.
+
+### `pythonw.exe` and C-library crashes
+**Problem:** Launching `app.py` via `pythonw.exe` detaches standard I/O handles (`sys.stdout`/`sys.stderr` become `None`). Many C-libraries (PyTorch, NeMo, Whisper) crash silently when attempting to write to these invalid handles on Windows.
+**Solution:** `pythonw.exe` is completely avoided. Instead, `python.exe` is launched using `subprocess.Popen` with the `CREATE_NO_WINDOW` (0x08000000) flag from `launcher.py`, keeping the console hidden but preserving valid standard handles. Furthermore, inside `app.py`, standard output and error are mapped directly to `os.devnull` via `os.dup2()` as an extra layer of protection.
 
 ---
 

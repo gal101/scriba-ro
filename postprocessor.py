@@ -45,7 +45,7 @@ def process_romanian(text):
                     return text
                     
                 # Modelul pcs_romance pare să înlocuiască cratima (-) cu <unk> în cuvinte compuse (ex: "să-ți", "vi-n")
-                final_text = final_text.replace("<unk>", "-").replace("  ", " ").strip()
+                final_text = re.sub(r"(?i)<unk>", "-", final_text).replace("  ", " ").strip()
                 return final_text
         except Exception as e:
             print(f"[PostProcessor] Eroare in timpul aplicarii punctuatiei: {e}")

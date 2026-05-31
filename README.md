@@ -34,7 +34,7 @@ cd scriba-ro
 run.bat
 ```
 
-On first run, `setup.py` automatically creates the virtual environment and downloads the Whisper model.  
+On first run, `launcher.py` automatically checks and installs dependencies, while `setup.py` downloads the Whisper model.  
 The NeMo model for Romanian is downloaded separately (see `AGENT.md` for details).
 
 ## Usage

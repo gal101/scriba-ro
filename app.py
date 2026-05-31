@@ -9,15 +9,16 @@ if BASE_DIR not in sys.path:
 
 # Redirect stdout/stderr if running under pythonw.exe to prevent crashes
 if sys.stdout is None or sys.stderr is None:
-    class NullWriter:
-        def write(self, text):
-            pass
-        def flush(self):
-            pass
-    if sys.stdout is None:
-        sys.stdout = NullWriter()
-    if sys.stderr is None:
-        sys.stderr = NullWriter()
+    try:
+        null_fd = os.open(os.devnull, os.O_RDWR)
+        if sys.stdout is None:
+            os.dup2(null_fd, 1)
+            sys.stdout = open(os.devnull, 'w', encoding='utf-8')
+        if sys.stderr is None:
+            os.dup2(null_fd, 2)
+            sys.stderr = open(os.devnull, 'w', encoding='utf-8')
+    except Exception:
+        pass
 
 import json
 import threading
@@ -546,6 +547,16 @@ def transcribe_and_type_thread(audio_data):
         if app_state.dashboard:
             app_state.dashboard.update_status("idle")
 
+def get_active_window_title():
+    try:
+        hwnd = ctypes.windll.user32.GetForegroundWindow()
+        length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
+        buff = ctypes.create_unicode_buffer(length + 1)
+        ctypes.windll.user32.GetWindowTextW(hwnd, buff, length + 1)
+        return buff.value
+    except Exception:
+        return ""
+
 def inject_text(text, add_space=True):
     if not text:
         return
@@ -562,9 +573,14 @@ def inject_text(text, add_space=True):
     # Copy to clipboard
     pyperclip.copy(text)
     
-    # Simulate Ctrl+V to paste instantly with correct diacritics
-    log_message(f"Trimitere text prin simulare taste (Ctrl+V): '{text}'")
-    pyautogui.hotkey('ctrl', 'v')
+    # Simulate correct paste shortcut based on active window
+    active_window = get_active_window_title()
+    if "Terax" in active_window:
+        log_message(f"Detectat terminal Terax. Se folosește Ctrl+Shift+V pentru text: '{text}'")
+        pyautogui.hotkey('ctrl', 'shift', 'v')
+    else:
+        log_message(f"Trimitere text prin simulare taste (Ctrl+V): '{text}'")
+        pyautogui.hotkey('ctrl', 'v')
     
     # Restore clipboard in a tiny background delay so we don't hold the lock
     def restore():
@@ -988,6 +1004,13 @@ def show_about():
 
 def exit_app():
     log_message("Ieșire din aplicația Scriba Ro...")
+    if app_state.dashboard:
+        try:
+            app_state.config["window_x"] = app_state.dashboard.winfo_x()
+            app_state.config["window_y"] = app_state.dashboard.winfo_y()
+            save_config()
+        except Exception:
+            pass
     if app_state.keyboard_listener:
         app_state.keyboard_listener.stop()
     if app_state.mouse_listener:
@@ -1012,12 +1035,29 @@ class DashboardWindow(ctk.CTk):
         self.resizable(False, False)
         ctk.set_appearance_mode("dark")
         
-        # Position at bottom-right corner of screen (above taskbar)
+        # Position window
         self.update_idletasks()
         screen_width = self.winfo_screenwidth()
         screen_height = self.winfo_screenheight()
-        x = screen_width - 340
-        y = screen_height - 320
+        
+        saved_x = app_state.config.get("window_x")
+        saved_y = app_state.config.get("window_y")
+        
+        if saved_x is not None and saved_y is not None:
+            try:
+                x = int(saved_x)
+                y = int(saved_y)
+                # Ensure it's mostly on-screen
+                if x < -300 or x > screen_width - 20 or y < -200 or y > screen_height - 20:
+                    x = screen_width - 340
+                    y = screen_height - 320
+            except:
+                x = screen_width - 340
+                y = screen_height - 320
+        else:
+            x = screen_width - 340
+            y = screen_height - 320
+            
         self.geometry(f"320x240+{x}+{y}")
         
         # Minimize to tray instead of closing on X button
@@ -1130,6 +1170,12 @@ class DashboardWindow(ctk.CTk):
 
     def hide_window(self):
         log_message("Minimizare panou control în system tray.")
+        try:
+            app_state.config["window_x"] = self.winfo_x()
+            app_state.config["window_y"] = self.winfo_y()
+            save_config()
+        except Exception:
+            pass
         self.withdraw()
         if app_state.tray_icon:
             app_state.tray_icon.notify("Scriba Ro rulează ascuns în system tray. Click stânga pe pictogramă pentru afișare.", "Scriba Ro - Minimizat")
