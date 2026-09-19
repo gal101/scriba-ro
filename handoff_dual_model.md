@@ -4,7 +4,7 @@
 
 **Scriba Ro** este o aplicație Windows de dictare vocală offline (system tray). Utilizatorul apasă o tastă rapidă, vorbește, iar textul este transcris și injectat automat în fereastra activă via Ctrl+V.
 
-**Locație:** `./`
+**Locație:** rădăcina repository-ului
 
 ---
 
@@ -27,7 +27,7 @@
 
 - **Model:** `openai/whisper-large-v3-turbo`
 - **Format:** CTranslate2 (faster-whisper)
-- **Cale:** `./models\whisper-large-v3-turbo-ct2\`
+- **Cale:** `models/whisper-large-v3-turbo-ct2/`
 - **Bibliotecă:** `faster-whisper`
 - **GPU:** NVIDIA RTX 4070 Laptop, CUDA 12.1, PyTorch 2.5.1+cu121
 - **Cuantizare activă:** `float16` pe GPU
@@ -36,7 +36,7 @@
 
 - **Model:** `upb-nlp/ro-fast-conformer` — cel mai bun ASR offline pentru română (WER 3.01%)
 - **Format:** fișier `.nemo` (NVIDIA NeMo toolkit)
-- **Cale fișier:** `~/.cache\torch\NeMo\NeMo_2.7.3\hf_hub_cache\upb-nlp\ro-fast-conformer\a7d4faeabc9e7ec0088eb05362d63e90\Speech_To_Text_Finetuning.nemo`
+- **Cale fișier:** `~/.cache/torch/NeMo/<versiune>/hf_hub_cache/upb-nlp/ro-fast-conformer/<hash>/Speech_To_Text_Finetuning.nemo`
 - **Dimensiune:** 453 MB
 - **Bibliotecă:** `nemo_toolkit[asr]` v2.7.3 (deja instalat în `.venv`)
 - **Încărcare corectă:** `nemo_asr.models.ASRModel.restore_from(nemo_path)`  

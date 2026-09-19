@@ -36,6 +36,6 @@ Even with the correct packages seemingly installed, `python test_transcribe_cuda
 - Investigate why the text injection doesn't happen anymore for the Romanian model. If the crash is fixed, this might magically be fixed too (because the crash was stopping the thread). If it doesn't fix it, trace the signals from the ASR thread to the GUI injection thread.
 
 ## Useful Files
-- `./test_transcribe_cuda.py` (Use this for fast iteration on the model loading without GUI overhead).
-- `./app.py` (Main application).
-- `./scriba.log` (Application logs).
+- `Tests/test_transcribe_cuda.py` (Use this for fast iteration on the model loading without GUI overhead).
+- `app.py` (Main application).
+- `scriba.log` (Application logs, generated at runtime).
